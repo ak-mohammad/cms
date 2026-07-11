@@ -1,10 +1,10 @@
 // Portfolio CMS Scripting
 let state = {
   token: localStorage.getItem('cms2_token') || '',
-  username: localStorage.getItem('cms2_username') || 'ak-mohammad',
-  repo: localStorage.getItem('cms2_repo') || 'profile',
-  branch: localStorage.getItem('cms2_branch') || 'main',
-  proxyUrl: localStorage.getItem('cms2_proxy') || '',
+  username: 'ak-mohammad',
+  repo: 'profile',
+  branch: 'main',
+  proxyUrl: 'https://github-auth-proxy-org.zaidkhan137782.workers.dev',
   posts: [],
   editingPost: null,
   workflowInterval: null
@@ -18,9 +18,7 @@ const panels = {
 };
 
 const elements = {
-  btnShowConfig: document.getElementById('btn-show-config'),
   btnLogout: document.getElementById('btn-logout'),
-  formLogin: document.getElementById('form-login'),
   btnOAuthLogin: document.getElementById('btn-oauth-login'),
   
   btnNewPost: document.getElementById('btn-new-post'),
@@ -49,7 +47,6 @@ const elements = {
 // Startup
 window.addEventListener('DOMContentLoaded', async () => {
   setupEventListeners();
-  loadLoginFields();
 
   // Check URL parameters for OAuth authorization code redirect
   const params = new URLSearchParams(window.location.search);
@@ -59,7 +56,7 @@ window.addEventListener('DOMContentLoaded', async () => {
     // Clear code from URL bar
     window.history.replaceState({}, document.title, window.location.pathname);
     await exchangeOAuthCode(code);
-  } else if (state.token && state.username && state.repo) {
+  } else if (state.token) {
     showPanel('dashboard');
     elements.btnLogout.classList.remove('hidden');
     await fetchPosts();
@@ -71,38 +68,16 @@ window.addEventListener('DOMContentLoaded', async () => {
 });
 
 function setupEventListeners() {
-  // Navigation
-  elements.btnShowConfig.addEventListener('click', () => {
-    loadLoginFields();
-    showPanel('login');
-    elements.btnLogout.classList.add('hidden');
-  });
-
+  // Navigation & Logout
   elements.btnLogout.addEventListener('click', () => {
     if (confirm('Are you sure you want to log out?')) {
       logout();
     }
   });
 
-  // Login actions
-  elements.formLogin.addEventListener('submit', handleTokenLogin);
-  
+  // OAuth Redirect
   elements.btnOAuthLogin.addEventListener('click', () => {
-    const proxy = document.getElementById('login-proxy').value.trim();
-    const username = document.getElementById('login-username').value.trim();
-    const repo = document.getElementById('login-repo').value.trim();
-    
-    if (!proxy) {
-      showToast('OAuth login requires an exchange proxy URL configured in settings.', 'error');
-      return;
-    }
-    
-    // Cache inputs before redirecting
-    localStorage.setItem('cms2_username', username);
-    localStorage.setItem('cms2_repo', repo);
-    localStorage.setItem('cms2_proxy', proxy);
-    
-    const clientId = 'Ov23lissjbf3KA3blXGg'; // GitHub OAuth Client ID
+    const clientId = 'Ov23liMqFfd1qv8S2Ha5'; // Registered Client ID
     const redirectUri = window.location.href;
     window.location.href = `https://github.com/login/oauth/authorize?client_id=${clientId}&scope=repo&redirect_uri=${encodeURIComponent(redirectUri)}`;
   });
@@ -142,20 +117,6 @@ function showPanel(panelName) {
       panels[name].classList.add('hidden');
     }
   });
-  
-  if (panelName === 'login') {
-    elements.btnShowConfig.classList.add('hidden');
-  } else {
-    elements.btnShowConfig.classList.remove('hidden');
-  }
-}
-
-function loadLoginFields() {
-  document.getElementById('login-token').value = state.token;
-  document.getElementById('login-username').value = state.username;
-  document.getElementById('login-repo').value = state.repo;
-  document.getElementById('login-branch').value = state.branch;
-  document.getElementById('login-proxy').value = state.proxyUrl;
 }
 
 function logout() {
@@ -167,63 +128,11 @@ function logout() {
   showPanel('login');
 }
 
-// Token connection
-async function handleTokenLogin(e) {
-  e.preventDefault();
-  
-  const token = document.getElementById('login-token').value.trim();
-  const username = document.getElementById('login-username').value.trim();
-  const repo = document.getElementById('login-repo').value.trim();
-  const branch = document.getElementById('login-branch').value.trim() || 'main';
-  const proxy = document.getElementById('login-proxy').value.trim();
-
-  showToast('Connecting to GitHub repository...', 'info');
-  try {
-    const res = await fetch(`https://api.github.com/repos/${username}/${repo}`, {
-      headers: {
-        'Authorization': `token ${token}`,
-        'Accept': 'application/vnd.github.v3+json'
-      }
-    });
-    
-    if (!res.ok) throw new Error(`HTTP ${res.status}: Repository not accessible.`);
-    
-    // Save to state
-    state.token = token;
-    state.username = username;
-    state.repo = repo;
-    state.branch = branch;
-    state.proxyUrl = proxy;
-
-    // Save to localStorage
-    localStorage.setItem('cms2_token', token);
-    localStorage.setItem('cms2_username', username);
-    localStorage.setItem('cms2_repo', repo);
-    localStorage.setItem('cms2_branch', branch);
-    localStorage.setItem('cms2_proxy', proxy);
-
-    showToast('Login validated successfully!', 'success');
-    showPanel('dashboard');
-    elements.btnLogout.classList.remove('hidden');
-    await fetchPosts();
-    startMonitoringWorkflow();
-  } catch (err) {
-    showToast(`Access error: ${err.message}`, 'error');
-  }
-}
-
 // OAuth Code exchange via Proxy Worker
 async function exchangeOAuthCode(code) {
-  const proxy = state.proxyUrl || localStorage.getItem('cms2_proxy');
-  if (!proxy) {
-    showToast('OAuth Proxy URL is missing. Paste your PAT in the form directly.', 'error');
-    showPanel('login');
-    return;
-  }
-
   showToast('Completing authorization...', 'info');
   try {
-    const res = await fetch(proxy, {
+    const res = await fetch(state.proxyUrl, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ code })
@@ -234,10 +143,6 @@ async function exchangeOAuthCode(code) {
 
     state.token = data.access_token;
     localStorage.setItem('cms2_token', state.token);
-    
-    // Load rest of state
-    state.username = localStorage.getItem('cms2_username') || 'ak-mohammad';
-    state.repo = localStorage.getItem('cms2_repo') || 'profile';
     
     showToast('Signed in with GitHub!', 'success');
     showPanel('dashboard');
