@@ -1,0 +1,57 @@
+---
+permalink: /callback.html
+---
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <title>Authenticating...</title>
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <style>
+        body { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif; background-color: #f0f2f5; display: flex; justify-content: center; align-items: center; height: 100vh; margin: 0; padding: 20px; box-sizing: border-box; }
+        .container { text-align: center; color: #606770; background: #fff; padding: 40px 30px; border-radius: 12px; box-shadow: 0 4px 12px rgba(0,0,0,0.05); }
+        .spinner { border: 4px solid #f3f3f3; border-top: 4px solid #2563eb; border-radius: 50%; width: 40px; height: 40px; animation: spin 1s linear infinite; margin: 0 auto 20px; }
+        @keyframes spin { 0% { transform: rotate(0deg); } 100% { transform: rotate(360deg); } }
+        h2 { color: #333; margin-top: 0; margin-bottom: 10px; }
+        p { margin-bottom: 25px; line-height: 1.5; }
+    </style>
+</head>
+<body>
+    <div class="container" id="auth-container">
+        <div class="spinner"></div>
+        <p>Please wait, completing authentication...</p>
+    </div>
+
+    <script>
+        window.onload = () => {
+            const urlParams = new URLSearchParams(window.location.search);
+            const code = urlParams.get('code');
+            const stateRaw = urlParams.get('state');
+
+            let stateObj = { id: stateRaw, dest: null };
+            try {
+                const decoded = atob(stateRaw);
+                if (decoded.trim().startsWith('{')) {
+                    stateObj = JSON.parse(decoded);
+                }
+            } catch (e) {
+                console.log("Simple state string detected:", stateRaw);
+            }
+
+            if (!code) {
+                document.getElementById('auth-container').innerHTML = '<p style="color: red; text-align: center;">Authentication error: No auth code provided. Please try again.</p>';
+                return;
+            }
+
+            if (stateObj.dest) {
+                window.location.href = `${stateObj.dest}?code=${code}&state=${stateObj.id}`;
+            } else {
+                document.getElementById('auth-container').innerHTML = `
+                    <p style="color: red; text-align: center;">
+                        <strong>Authentication Error:</strong> Lost redirect destination.
+                    </p>`;
+            }
+        };
+    </script>
+</body>
+</html>

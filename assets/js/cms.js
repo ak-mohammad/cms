@@ -4,7 +4,7 @@ const GITHUB_CONFIG = {
     redirectUri: window.location.origin + window.location.pathname,
     orgOwner: 'ak-mohammad', // ALL articles go here now
     repoBranch: 'main',
-    tokenExchangeUrl: 'https://github-auth-proxy-org.zaidkhan137782.workers.dev',
+    tokenExchangeUrl: 'https://md-aouth.zaidkhanalamgirofficial.workers.dev',
 };
 
 let state = {
@@ -84,8 +84,9 @@ function setupEventListeners() {
   // OAuth Redirect
   elements.btnOAuthLogin.addEventListener('click', () => {
     const clientId = GITHUB_CONFIG.clientId;
-    const redirectUri = GITHUB_CONFIG.redirectUri;
-    window.location.href = `https://github.com/login/oauth/authorize?client_id=${clientId}&scope=repo,user:email&redirect_uri=${encodeURIComponent(redirectUri)}`;
+    const destUrl = window.location.origin + window.location.pathname;
+    const stateEncoded = btoa(JSON.stringify({ id: 'portfolio_cms', dest: destUrl }));
+    window.location.href = `https://github.com/login/oauth/authorize?client_id=${clientId}&scope=repo,user:email&state=${encodeURIComponent(stateEncoded)}`;
   });
 
   // Dashboard actions
