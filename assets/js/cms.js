@@ -76,10 +76,16 @@ function setupEventListeners() {
   });
 
   // OAuth Redirect
-  elements.btnOAuthLogin.addEventListener('click', () => {
+  elements.btnOAuthLogin.addEventListener('click', async () => {
     const clientId = 'Ov23liMqFfd1qv8S2Ha5'; // Registered Client ID
-    const redirectUri = window.location.href;
-    window.location.href = `https://github.com/login/oauth/authorize?client_id=${clientId}&scope=repo&redirect_uri=${encodeURIComponent(redirectUri)}`;
+    const redirectUri = window.location.origin + window.location.pathname;
+    
+    // Generate PKCE code verifier and challenge
+    const verifier = generateRandomString(64);
+    localStorage.setItem('cms_code_verifier', verifier);
+    const challenge = await generateChallenge(verifier);
+    
+    window.location.href = `https://github.com/login/oauth/authorize?client_id=${clientId}&scope=repo&redirect_uri=${encodeURIComponent(redirectUri)}&code_challenge=${challenge}&code_challenge_method=S256`;
   });
 
   // Dashboard actions
@@ -128,21 +134,71 @@ function logout() {
   showPanel('login');
 }
 
-// OAuth Code exchange via Proxy Worker
+// PKCE Helper Functions
+function generateRandomString(length) {
+  const array = new Uint8Array(length);
+  window.crypto.getRandomValues(array);
+  return Array.from(array, dec => ('0' + dec.toString(16)).substr(-2)).join('').substring(0, length);
+}
+
+async function sha256(plain) {
+  const encoder = new TextEncoder();
+  const data = encoder.encode(plain);
+  return window.crypto.subtle.digest('SHA-256', data);
+}
+
+function base64urlencode(a) {
+  let str = "";
+  const bytes = new Uint8Array(a);
+  const len = bytes.byteLength;
+  for (let i = 0; i < len; i++) {
+    str += String.fromCharCode(bytes[i]);
+  }
+  return btoa(str)
+    .replace(/\+/g, "-")
+    .replace(/\//g, "_")
+    .replace(/=+$/, "");
+}
+
+async function generateChallenge(verifier) {
+  const hashed = await sha256(verifier);
+  return base64urlencode(hashed);
+}
+
+// OAuth Code exchange via Public CORS Proxy (No secret required with PKCE)
 async function exchangeOAuthCode(code) {
   showToast('Completing authorization...', 'info');
+  const verifier = localStorage.getItem('cms_code_verifier');
+  
+  if (!verifier) {
+    showToast('Authentication failed: PKCE code verifier is missing.', 'error');
+    showPanel('login');
+    return;
+  }
+  
   try {
-    const res = await fetch(state.proxyUrl, {
+    const clientId = 'Ov23liMqFfd1qv8S2Ha5';
+    const proxyUrl = 'https://corsproxy.io/?' + encodeURIComponent('https://github.com/login/oauth/access_token');
+    
+    const res = await fetch(proxyUrl, {
       method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ code })
+      headers: {
+        'Content-Type': 'application/json',
+        'Accept': 'application/json'
+      },
+      body: JSON.stringify({
+        client_id: clientId,
+        code: code,
+        code_verifier: verifier
+      })
     });
 
     const data = await res.json();
-    if (!res.ok || !data.access_token) throw new Error(data.error || 'Failed to exchange token.');
+    if (!res.ok || !data.access_token) throw new Error(data.error_description || data.error || 'Failed to exchange token.');
 
     state.token = data.access_token;
     localStorage.setItem('cms2_token', state.token);
+    localStorage.removeItem('cms_code_verifier');
     
     showToast('Signed in with GitHub!', 'success');
     showPanel('dashboard');
