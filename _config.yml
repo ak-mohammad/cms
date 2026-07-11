@@ -1,0 +1,12 @@
+title: Portfolio CMS
+baseurl: "/cms"
+url: "https://ak-mohammad.github.io"
+
+# Jekyll settings
+markdown: kramdown
+permalink: /:title/
+exclude:
+  - Gemfile
+  - Gemfile.lock
+  - node_modules/
+  - vendor/

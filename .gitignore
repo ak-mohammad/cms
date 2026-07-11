@@ -1,0 +1,17 @@
+# Jekyll build output
+_site/
+
+# Jekyll cache and metadata
+.jekyll-cache/
+.jekyll-metadata
+
+# Bundler directories
+.bundle/
+vendor/bundle/
+vendor/cache/
+
+# Local files
+.DS_Store
+Thumbs.db
+config.json
+.env

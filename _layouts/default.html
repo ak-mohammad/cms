@@ -1,0 +1,52 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>{{ page.title }} | Portfolio CMS</title>
+  
+  <!-- Fonts -->
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Outfit:wght@300;400;500;600;700;800&family=Plus+Jakarta+Sans:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+  
+  <!-- CSS -->
+  <link rel="stylesheet" href="{{ '/assets/css/style.css' | relative_url }}">
+  
+  <!-- Marked.js (Markdown parser) -->
+  <script src="https://cdn.jsdelivr.net/npm/marked/marked.min.js"></script>
+</head>
+<body class="dark-theme">
+  <!-- Glowing Background Blobs -->
+  <div class="blob blob-1"></div>
+  <div class="blob blob-2"></div>
+
+  <div class="cms-container">
+    <header class="cms-header">
+      <div class="cms-logo">
+        <span class="logo-accent">MA.</span> Portfolio CMS
+      </div>
+      
+      <!-- Deployment tracker (polling GitHub Actions on profile repo) -->
+      <div id="deployment-tracker" class="tracker-panel hidden">
+        <span class="pulse"></span>
+        <span id="tracker-text">Checking deployment...</span>
+        <a id="tracker-link" href="#" target="_blank" class="tracker-btn" style="margin-left: 0.5rem; text-decoration: underline; color: var(--secondary);">View Live</a>
+      </div>
+      
+      <div class="header-actions">
+        <button id="btn-logout" class="btn btn-secondary hidden">Logout</button>
+      </div>
+    </header>
+
+    <main class="cms-main">
+      {{ content }}
+    </main>
+    
+    <div id="toast" class="toast hidden"></div>
+  </div>
+
+  <!-- JS -->
+  <script src="{{ '/assets/js/cms.js' | relative_url }}"></script>
+</body>
+</html>
