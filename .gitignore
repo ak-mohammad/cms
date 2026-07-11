@@ -15,3 +15,6 @@ vendor/cache/
 Thumbs.db
 config.json
 .env
+
+#---files----
+worker.js

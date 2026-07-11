@@ -1,10 +1,17 @@
-// Portfolio CMS Scripting
+// Portfolio CMS Scripting & Configurations
+const GITHUB_CONFIG = {
+    clientId: 'Ov23liMqFfd1qv8S2Ha5',
+    redirectUri: window.location.origin + window.location.pathname,
+    orgOwner: 'ak-mohammad', // ALL articles go here now
+    repoBranch: 'main',
+    tokenExchangeUrl: 'https://github-auth-proxy-org.zaidkhan137782.workers.dev',
+};
+
 let state = {
   token: localStorage.getItem('cms2_token') || '',
-  username: 'ak-mohammad',
+  username: GITHUB_CONFIG.orgOwner,
   repo: 'profile',
-  branch: 'main',
-  proxyUrl: 'https://github-auth-proxy-org.zaidkhan137782.workers.dev',
+  branch: GITHUB_CONFIG.repoBranch,
   posts: [],
   editingPost: null,
   workflowInterval: null
@@ -45,16 +52,15 @@ const elements = {
 };
 
 // Startup
-window.addEventListener('DOMContentLoaded', async () => {
+window.onload = async () => {
   setupEventListeners();
 
   // Check URL parameters for OAuth authorization code redirect
-  const params = new URLSearchParams(window.location.search);
-  const code = params.get('code');
+  const code = new URLSearchParams(window.location.search).get('code');
   
   if (code) {
     // Clear code from URL bar
-    window.history.replaceState({}, document.title, window.location.pathname);
+    window.history.pushState({}, document.title, window.location.pathname);
     await exchangeOAuthCode(code);
   } else if (state.token) {
     showPanel('dashboard');
@@ -65,7 +71,7 @@ window.addEventListener('DOMContentLoaded', async () => {
     showPanel('login');
     elements.btnLogout.classList.add('hidden');
   }
-});
+};
 
 function setupEventListeners() {
   // Navigation & Logout
@@ -76,16 +82,10 @@ function setupEventListeners() {
   });
 
   // OAuth Redirect
-  elements.btnOAuthLogin.addEventListener('click', async () => {
-    const clientId = 'Ov23liMqFfd1qv8S2Ha5'; // Registered Client ID
-    const redirectUri = window.location.origin + window.location.pathname;
-    
-    // Generate PKCE code verifier and challenge
-    const verifier = generateRandomString(64);
-    localStorage.setItem('cms_code_verifier', verifier);
-    const challenge = await generateChallenge(verifier);
-    
-    window.location.href = `https://github.com/login/oauth/authorize?client_id=${clientId}&scope=repo&redirect_uri=${encodeURIComponent(redirectUri)}&code_challenge=${challenge}&code_challenge_method=S256`;
+  elements.btnOAuthLogin.addEventListener('click', () => {
+    const clientId = GITHUB_CONFIG.clientId;
+    const redirectUri = GITHUB_CONFIG.redirectUri;
+    window.location.href = `https://github.com/login/oauth/authorize?client_id=${clientId}&scope=repo,user:email&redirect_uri=${encodeURIComponent(redirectUri)}`;
   });
 
   // Dashboard actions
@@ -125,80 +125,59 @@ function showPanel(panelName) {
   });
 }
 
-function logout() {
+async function logout() {
+  const token = state.token;
   state.token = '';
   localStorage.removeItem('cms2_token');
   clearInterval(state.workflowInterval);
   elements.deploymentTracker.classList.add('hidden');
   elements.btnLogout.classList.add('hidden');
   showPanel('login');
-}
 
-// PKCE Helper Functions
-function generateRandomString(length) {
-  const array = new Uint8Array(length);
-  window.crypto.getRandomValues(array);
-  return Array.from(array, dec => ('0' + dec.toString(16)).substr(-2)).join('').substring(0, length);
-}
-
-async function sha256(plain) {
-  const encoder = new TextEncoder();
-  const data = encoder.encode(plain);
-  return window.crypto.subtle.digest('SHA-256', data);
-}
-
-function base64urlencode(a) {
-  let str = "";
-  const bytes = new Uint8Array(a);
-  const len = bytes.byteLength;
-  for (let i = 0; i < len; i++) {
-    str += String.fromCharCode(bytes[i]);
+  if (token && GITHUB_CONFIG.tokenExchangeUrl) {
+    try {
+      await fetch(GITHUB_CONFIG.tokenExchangeUrl, {
+        method: 'DELETE',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ token })
+      });
+    } catch (err) {
+      console.error('Failed to revoke token on GitHub:', err);
+    }
   }
-  return btoa(str)
-    .replace(/\+/g, "-")
-    .replace(/\//g, "_")
-    .replace(/=+$/, "");
 }
 
-async function generateChallenge(verifier) {
-  const hashed = await sha256(verifier);
-  return base64urlencode(hashed);
-}
+let isExchanging = false;
 
-// OAuth Code exchange via Public CORS Proxy (No secret required with PKCE)
+// OAuth Code exchange via Cloudflare Worker Proxy
 async function exchangeOAuthCode(code) {
-  showToast('Completing authorization...', 'info');
-  const verifier = localStorage.getItem('cms_code_verifier');
+  if (isExchanging) return;
+  isExchanging = true;
   
-  if (!verifier) {
-    showToast('Authentication failed: PKCE code verifier is missing.', 'error');
-    showPanel('login');
-    return;
-  }
+  showToast('Completing authorization...', 'info');
   
   try {
-    const clientId = 'Ov23liMqFfd1qv8S2Ha5';
-    const proxyUrl = 'https://corsproxy.io/?' + encodeURIComponent('https://github.com/login/oauth/access_token');
-    
-    const res = await fetch(proxyUrl, {
+    if (!GITHUB_CONFIG.tokenExchangeUrl) {
+      throw new Error('Token Exchange URL is not set in GITHUB_CONFIG.');
+    }
+
+    const res = await fetch(GITHUB_CONFIG.tokenExchangeUrl, {
       method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-        'Accept': 'application/json'
-      },
-      body: JSON.stringify({
-        client_id: clientId,
-        code: code,
-        code_verifier: verifier
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ 
+        code: code
       })
     });
 
     const data = await res.json();
-    if (!res.ok || !data.access_token) throw new Error(data.error_description || data.error || 'Failed to exchange token.');
+    if (!res.ok) {
+      const errMsg = data.error || 'Failed to exchange token.';
+      const details = data.details ? ` - ${data.details}` : '';
+      throw new Error(errMsg + details);
+    }
 
     state.token = data.access_token;
     localStorage.setItem('cms2_token', state.token);
-    localStorage.removeItem('cms_code_verifier');
     
     showToast('Signed in with GitHub!', 'success');
     showPanel('dashboard');
@@ -206,6 +185,7 @@ async function exchangeOAuthCode(code) {
     await fetchPosts();
     startMonitoringWorkflow();
   } catch (err) {
+    isExchanging = false;
     showToast(err.message, 'error');
     showPanel('login');
   }
